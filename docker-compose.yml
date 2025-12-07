@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  whatsapp-connector:
+    build: .
+    container_name: whatsapp-qr-connector
+    ports:
+      - "8010:8010"
+    environment:
+      - UAZAPI_BASE_URL=https://benitechlab.uazapi.com
+      - PORT=8010
+    restart: unless-stopped
+    volumes:
+      - ./app.py:/app/app.py
+      - ./index.html:/app/index.html
+    networks:
+      - whatsapp-network
+
+networks:
+  whatsapp-network:
+    driver: bridge
