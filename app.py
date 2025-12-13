@@ -1,11 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
 import httpx
-import asyncio
 from datetime import datetime
 import logging
 
@@ -27,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Base URL da UazAPI
+# Base URL da UazAPI (conforme documentação)
 UAZAPI_BASE_URL = "https://benitechlab.uazapi.com"
 
 # Armazenar sessões ativas (em produção, use Redis ou banco de dados)
@@ -63,50 +61,170 @@ async def health_check():
 
 @app.post("/api/connect")
 async def connect_whatsapp(request: ConnectRequest):
-    """Iniciar conexão do WhatsApp via QR Code ou Código de Pareamento"""
+    """
+    Iniciar conexão do WhatsApp via QR Code ou Código de Pareamento
+    
+    Conforme documentação UazAPI:
+    - Endpoint: POST /instance/connect
+    - Header: token: {instance_token}
+    - Body: {"phone": "5511999999999"} (opcional)
+    - Com phone: gera código de pareamento
+    - Sem phone: gera QR Code
+    """
     
     logger.info(f"Iniciando conexão para instância: {request.instance_token[:8]}...")
     
     try:
         # Validar formato do token
         if len(request.instance_token) < 10:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=400,
-                detail="Token da instância inválido"
+                content={
+                    "success": False,
+                    "message": "Token da instância inválido",
+                    "error": "invalid_token"
+                }
             )
         
-        # Preparar headers
+        # Preparar headers conforme documentação
         headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "token": request.instance_token  # Token vai no header!
         }
         
-        # URL base da instância
-        instance_url = f"{UAZAPI_BASE_URL}/instance/{request.instance_token}"
+        # Preparar body
+        body = {}
+        if request.phone:
+            # Validar e formatar telefone
+            phone = request.phone.strip().replace("+", "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            
+            if not phone.isdigit() or len(phone) < 10:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "message": "Número de telefone inválido. Use o formato: 5511999999999",
+                        "error": "invalid_phone"
+                    }
+                )
+            
+            body["phone"] = phone
+            logger.info(f"Solicitando código de pareamento para: {phone}")
+        else:
+            logger.info("Solicitando QR Code")
         
         # Configurar timeout
         timeout = httpx.Timeout(30.0, connect=10.0)
         
         async with httpx.AsyncClient(timeout=timeout) as client:
-            # Verificar se a instância existe
             try:
-                check_response = await client.get(
-                    f"{instance_url}/status",
-                    headers=headers
+                # Fazer requisição ao endpoint correto
+                response = await client.post(
+                    f"{UAZAPI_BASE_URL}/instance/connect",
+                    headers=headers,
+                    json=body if body else None
                 )
                 
-                if check_response.status_code == 404:
-                    logger.error(f"Instância não encontrada: {request.instance_token[:8]}...")
+                logger.info(f"Status da resposta: {response.status_code}")
+                
+                # Tratar diferentes status codes conforme documentação
+                if response.status_code == 200:
+                    # Sucesso
+                    data = response.json()
+                    
+                    # Armazenar sessão
+                    active_sessions[request.instance_token] = {
+                        "phone": body.get("phone", ""),
+                        "type": "pairing" if body.get("phone") else "qr",
+                        "created_at": datetime.now().isoformat()
+                    }
+                    
+                    logger.info(f"Conexão iniciada com sucesso. Tipo: {'pareamento' if body.get('phone') else 'QR Code'}")
+                    
+                    return {
+                        "success": True,
+                        "data": data,
+                        "message": "Conexão iniciada com sucesso",
+                        "session_id": request.instance_token
+                    }
+                
+                elif response.status_code == 401:
+                    # Token inválido/expirado
+                    logger.error("Token inválido ou expirado")
                     return JSONResponse(
-                        status_code=400,
+                        status_code=401,
                         content={
                             "success": False,
-                            "message": "Instância não encontrada. Verifique o token.",
+                            "message": "Token inválido ou expirado",
+                            "error": "invalid_token"
+                        }
+                    )
+                
+                elif response.status_code == 404:
+                    # Instância não encontrada
+                    logger.error("Instância não encontrada")
+                    return JSONResponse(
+                        status_code=404,
+                        content={
+                            "success": False,
+                            "message": "Instância não encontrada. Verifique se o token está correto.",
                             "error": "instance_not_found"
                         }
                     )
+                
+                elif response.status_code == 429:
+                    # Limite de conexões simultâneas atingido
+                    logger.error("Limite de conexões simultâneas atingido")
+                    return JSONResponse(
+                        status_code=429,
+                        content={
+                            "success": False,
+                            "message": "Limite de conexões simultâneas atingido. Tente novamente em alguns instantes.",
+                            "error": "rate_limit"
+                        }
+                    )
+                
+                elif response.status_code == 500:
+                    # Erro interno da UazAPI
+                    logger.error("Erro interno da UazAPI")
+                    error_detail = response.text
+                    return JSONResponse(
+                        status_code=500,
+                        content={
+                            "success": False,
+                            "message": "Erro interno do servidor UazAPI",
+                            "error": "uazapi_error",
+                            "details": error_detail
+                        }
+                    )
+                
+                else:
+                    # Status code não documentado
+                    logger.error(f"Status code inesperado: {response.status_code}")
+                    return JSONResponse(
+                        status_code=response.status_code,
+                        content={
+                            "success": False,
+                            "message": f"Erro ao conectar. Status: {response.status_code}",
+                            "error": "unexpected_error",
+                            "details": response.text
+                        }
+                    )
                     
-            except httpx.ConnectError:
-                logger.error("Erro ao conectar com a API UazAPI")
+            except httpx.TimeoutException:
+                logger.error("Timeout ao conectar com UazAPI")
+                return JSONResponse(
+                    status_code=504,
+                    content={
+                        "success": False,
+                        "message": "Tempo esgotado ao conectar. Tente novamente.",
+                        "error": "timeout"
+                    }
+                )
+            
+            except httpx.ConnectError as e:
+                logger.error(f"Erro de conexão com UazAPI: {str(e)}")
                 return JSONResponse(
                     status_code=503,
                     content={
@@ -115,128 +233,7 @@ async def connect_whatsapp(request: ConnectRequest):
                         "error": "connection_error"
                     }
                 )
-            
-            # Decidir se usa QR Code ou Código de Pareamento
-            if request.phone:
-                # Validar formato do telefone
-                phone = request.phone.strip().replace("+", "").replace(" ", "").replace("-", "")
-                
-                if not phone.isdigit() or len(phone) < 10:
-                    return JSONResponse(
-                        status_code=400,
-                        content={
-                            "success": False,
-                            "message": "Número de telefone inválido. Use o formato: 5511999999999",
-                            "error": "invalid_phone"
-                        }
-                    )
-                
-                logger.info(f"Solicitando código de pareamento para: {phone}")
-                
-                # Solicitar código de pareamento
-                try:
-                    pairing_response = await client.post(
-                        f"{instance_url}/qr/pairing-code",
-                        json={"phone": phone},
-                        headers=headers
-                    )
                     
-                    if pairing_response.status_code != 200:
-                        error_detail = pairing_response.text
-                        logger.error(f"Erro ao gerar código: {error_detail}")
-                        return JSONResponse(
-                            status_code=pairing_response.status_code,
-                            content={
-                                "success": False,
-                                "message": "Erro ao gerar código de pareamento",
-                                "error": "pairing_code_error",
-                                "details": error_detail
-                            }
-                        )
-                    
-                    pairing_data = pairing_response.json()
-                    
-                    # Armazenar sessão
-                    active_sessions[request.instance_token] = {
-                        "phone": phone,
-                        "type": "pairing",
-                        "created_at": datetime.now().isoformat()
-                    }
-                    
-                    return {
-                        "success": True,
-                        "data": {
-                            "pairingCode": pairing_data.get("pairingCode", ""),
-                            "phone": phone
-                        },
-                        "message": "Código de pareamento gerado com sucesso",
-                        "session_id": request.instance_token
-                    }
-                    
-                except httpx.TimeoutException:
-                    logger.error("Timeout ao gerar código de pareamento")
-                    return JSONResponse(
-                        status_code=504,
-                        content={
-                            "success": False,
-                            "message": "Tempo esgotado ao gerar código de pareamento",
-                            "error": "timeout"
-                        }
-                    )
-                    
-            else:
-                # Solicitar QR Code
-                logger.info("Solicitando QR Code")
-                
-                try:
-                    qr_response = await client.get(
-                        f"{instance_url}/qr/image",
-                        headers=headers
-                    )
-                    
-                    if qr_response.status_code != 200:
-                        error_detail = qr_response.text
-                        logger.error(f"Erro ao gerar QR Code: {error_detail}")
-                        return JSONResponse(
-                            status_code=qr_response.status_code,
-                            content={
-                                "success": False,
-                                "message": "Erro ao gerar QR Code",
-                                "error": "qr_code_error",
-                                "details": error_detail
-                            }
-                        )
-                    
-                    qr_data = qr_response.json()
-                    
-                    # Armazenar sessão
-                    active_sessions[request.instance_token] = {
-                        "type": "qr",
-                        "created_at": datetime.now().isoformat()
-                    }
-                    
-                    return {
-                        "success": True,
-                        "data": {
-                            "qrCode": qr_data.get("qrCode", "")
-                        },
-                        "message": "QR Code gerado com sucesso",
-                        "session_id": request.instance_token
-                    }
-                    
-                except httpx.TimeoutException:
-                    logger.error("Timeout ao gerar QR Code")
-                    return JSONResponse(
-                        status_code=504,
-                        content={
-                            "success": False,
-                            "message": "Tempo esgotado ao gerar QR Code",
-                            "error": "timeout"
-                        }
-                    )
-                    
-    except HTTPException as he:
-        raise he
     except Exception as e:
         logger.error(f"Erro inesperado ao conectar: {str(e)}", exc_info=True)
         return JSONResponse(
@@ -251,39 +248,68 @@ async def connect_whatsapp(request: ConnectRequest):
 
 @app.post("/api/status")
 async def check_status(request: StatusRequest):
-    """Verificar o status da conexão"""
+    """
+    Verificar o status da conexão
+    
+    Conforme documentação UazAPI:
+    - Endpoint: GET /instance/status
+    - Header: token: {instance_token}
+    - Estados: disconnected, connecting, connected
+    """
     
     logger.info(f"Verificando status para: {request.instance_token[:8]}...")
     
     try:
+        # Preparar headers
         headers = {
-            "Content-Type": "application/json"
+            "Accept": "application/json",
+            "token": request.instance_token
         }
-        
-        instance_url = f"{UAZAPI_BASE_URL}/instance/{request.instance_token}"
         
         timeout = httpx.Timeout(15.0, connect=5.0)
         
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
-                status_response = await client.get(
-                    f"{instance_url}/status",
+                response = await client.get(
+                    f"{UAZAPI_BASE_URL}/instance/status",
                     headers=headers
                 )
                 
-                if status_response.status_code == 200:
-                    status_data = status_response.json()
+                logger.info(f"Status code: {response.status_code}")
+                
+                if response.status_code == 200:
+                    status_data = response.json()
+                    
+                    logger.info(f"Status obtido: {status_data.get('status', 'unknown')}")
                     
                     return {
                         "success": True,
-                        "data": {
-                            "status": status_data.get("status", "unknown"),
-                            "phone": status_data.get("phone", "")
-                        }
+                        "data": status_data
                     }
+                
+                elif response.status_code == 401:
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "success": False,
+                            "message": "Token inválido ou expirado",
+                            "error": "invalid_token"
+                        }
+                    )
+                
+                elif response.status_code == 404:
+                    return JSONResponse(
+                        status_code=404,
+                        content={
+                            "success": False,
+                            "message": "Instância não encontrada",
+                            "error": "instance_not_found"
+                        }
+                    )
+                
                 else:
                     return JSONResponse(
-                        status_code=status_response.status_code,
+                        status_code=response.status_code,
                         content={
                             "success": False,
                             "message": "Erro ao verificar status",
@@ -301,6 +327,7 @@ async def check_status(request: StatusRequest):
                         "error": "timeout"
                     }
                 )
+            
             except httpx.ConnectError:
                 logger.error("Erro de conexão ao verificar status")
                 return JSONResponse(
