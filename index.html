@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Conector</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0a1628;
+      color: #e0e6ed;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #0f1f3d;
+      border-bottom: 1px solid #1a3a6e;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header svg { flex-shrink: 0; }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    header span {
+      font-size: 12px;
+      background: #25d366;
+      color: #0a1628;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* --- Add Instance Form --- */
+    .add-section {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .add-section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #7eb8ff;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .form-group {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #8a9bb5;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      background: #081222;
+      border: 1px solid #1a3a6e;
+      border-radius: 8px;
+      color: #e0e6ed;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .form-group input::placeholder { color: #4a5d7a; }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: #fff;
+      align-self: flex-end;
+      margin-top: 6px;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #2563eb; }
+
+    .btn-success { background: #25d366; color: #0a1628; }
+    .btn-success:hover:not(:disabled) { background: #1fb855; }
+
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #1a3a6e;
+      color: #8a9bb5;
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      border-color: #3b82f6;
+      color: #7eb8ff;
+    }
+
+    /* --- Instance Cards --- */
+    .instances-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .instances-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #7eb8ff;
+    }
+
+    .instance-count {
+      font-size: 13px;
+      color: #4a5d7a;
+    }
+
+    .instances-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .instance-card {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 12px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .instance-card:hover { border-color: #2a4a7e; }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .card-info { flex: 1; }
+
+    .card-info .phone {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-info .token-preview {
+      font-size: 12px;
+      color: #4a5d7a;
+      margin-top: 2px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .status-disconnected { background: #1e1e2e; color: #6b7280; }
+    .status-connecting { background: #1e293b; color: #f59e0b; }
+    .status-connected { background: #052e16; color: #25d366; }
+    .status-error { background: #2e0a0a; color: #ef4444; }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* --- QR Code --- */
+    .qr-section {
+      margin-top: 16px;
+      padding: 16px;
+      background: #081222;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .qr-section img, .qr-section canvas {
+      max-width: 256px;
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+    }
+
+    .qr-label {
+      font-size: 12px;
+      color: #8a9bb5;
+      margin-top: 8px;
+    }
+
+    .qr-timer {
+      font-size: 13px;
+      color: #f59e0b;
+      margin-top: 6px;
+    }
+
+    /* --- Empty State --- */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #4a5d7a;
+    }
+
+    .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+
+    .empty-state p {
+      font-size: 14px;
+      max-width: 300px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* --- Toast --- */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      animation: slideIn 0.3s ease, fadeOut 0.3s ease 3s forwards;
+      max-width: 360px;
+    }
+
+    .toast-success { background: #052e16; color: #25d366; border: 1px solid #14532d; }
+    .toast-error { background: #2e0a0a; color: #ef4444; border: 1px solid #450a0a; }
+    .toast-info { background: #0c1f3d; color: #7eb8ff; border: 1px solid #1a3a6e; }
+
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    /* --- Modal --- */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 900;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 420px;
+      width: 90%;
+    }
+
+    .modal h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .modal p {
+      font-size: 14px;
+      color: #8a9bb5;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* --- Spinner --- */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+
+    /* --- Responsive --- */
+    @media (max-width: 640px) {
+      .form-row { flex-direction: column; }
+      .form-group { min-width: 100%; }
+      .card-actions { flex-direction: column; }
+      .card-actions .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="#25d366">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+    <h1>WhatsApp Conector</h1>
+    <span>uazapi</span>
+  </header>
+
+  <div class="container">
+
+    <!-- Add Instance -->
+    <div class="add-section">
+      <h2>+ Nova Instancia</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Numero de Telefone</label>
+          <input type="text" id="phoneInput" placeholder="5571999999999" />
+        </div>
+        <div class="form-group">
+          <label>Token da Instancia</label>
+          <input type="text" id="tokenInput" placeholder="Token fornecido pela uazapi" />
+        </div>
+        <button class="btn btn-primary" onclick="addInstance()" style="align-self:flex-end;margin-bottom:1px">
+          Adicionar
+        </button>
+      </div>
+    </div>
+
+    <!-- Instances List -->
+    <div class="instances-header">
+      <h2>Instancias</h2>
+      <span class="instance-count" id="instanceCount">0 instancias</span>
+    </div>
+
+    <div class="instances-grid" id="instancesGrid">
+      <div class="empty-state" id="emptyState">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="#4a5d7a">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+        </svg>
+        <p>Nenhuma instancia adicionada. Adicione um numero de telefone e token para comecar.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <h3>Remover Instancia</h3>
+      <p>Tem certeza que deseja remover esta instancia? A conexao sera encerrada.</p>
+      <div class="modal-actions">
+        <button class="btn btn-outline btn-sm" onclick="closeDeleteModal()">Cancelar</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDelete()">Remover</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // ---- Config ----
+    const API_BASE_URL = 'https://benitechlab.uazapi.com';
+    const QR_TIMEOUT_SECONDS = 60;
+    const STATUS_POLL_INTERVAL = 5000;
+
+    // ---- State ----
+    let instances = JSON.parse(localStorage.getItem('wpp_instances') || '[]');
+    let deleteTargetId = null;
+    const activePollers = {};  // id -> { interval, timeout, countdownInterval }
+
+    // ---- Persistence ----
+    function save() {
+      localStorage.setItem('wpp_instances', JSON.stringify(instances));
+    }
+
+    // ---- Add Instance ----
+    function addInstance() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const token = document.getElementById('tokenInput').value.trim();
+
+      if (!phone || !token) {
+        toast('Preencha o numero e o token', 'error');
+        return;
+      }
+
+      if (instances.find(i => i.phone === phone)) {
+        toast('Esse numero ja foi adicionado', 'error');
+        return;
+      }
+
+      instances.push({
+        id: Date.now().toString(36),
+        phone,
+        token,
+        status: 'disconnected',
+        addedAt: new Date().toISOString()
+      });
+
+      save();
+      render();
+
+      document.getElementById('phoneInput').value = '';
+      document.getElementById('tokenInput').value = '';
+      toast(`Instancia ${phone} adicionada`, 'success');
+    }
+
+    // ---- Polling helpers ----
+    function stopPolling(id) {
+      const poller = activePollers[id];
+      if (!poller) return;
+      clearInterval(poller.interval);
+      clearTimeout(poller.timeout);
+      clearInterval(poller.countdownInterval);
+      delete activePollers[id];
+    }
+
+    function startPolling(id) {
+      stopPolling(id);
+
+      const inst = instances.find(i => i.id === id);
+      if (!inst) return;
+
+      inst.timeLeft = QR_TIMEOUT_SECONDS;
+      render();
+
+      const interval = setInterval(async () => {
+        const inst = instances.find(i => i.id === id);
+        if (!inst || inst.status !== 'connecting') {
+          stopPolling(id);
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/instance/status`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${inst.token}` }
+          });
+          const data = await res.json();
+
+          if (data.connected || data.status === 'connected' || data.status === 'CONNECTED' || data.state === 'open') {
+            stopPolling(id);
+            inst.status = 'connected';
+            inst.qrCode = null;
+            inst.timeLeft = null;
+            save();
+            render();
+            toast(`${inst.phone} conectado com sucesso!`, 'success');
+          }
+        } catch (_) {}
+      }, STATUS_POLL_INTERVAL);
+
+      const countdownInterval = setInterval(() => {
+        const inst = instances.find(i => i.id === id);
+        if (!inst || inst.status !== 'connecting') {
+          stopPolling(id);
+          return;
+        }
+        inst.timeLeft = Math.max(0, (inst.timeLeft || 0) - 1);
+        const el = document.getElementById(`countdown-${id}`);
+        if (el) el.textContent = `${inst.timeLeft}s`;
+      }, 1000);
+
+      const timeout = setTimeout(() => {
+        const inst = instances.find(i => i.id === id);
+        if (inst && inst.status === 'connecting') {
+          stopPolling(id);
+          inst.status = 'disconnected';
+          inst.qrCode = null;
+          inst.timeLeft = null;
+          save();
+          render();
+          toast(`Tempo esgotado para ${inst.phone}. Tente novamente.`, 'error');
+        }
+      }, QR_TIMEOUT_SECONDS * 1000);
+
+      activePollers[id] = { interval, timeout, countdownInterval };
+    }
+
+    function cancelConnection(id) {
+      stopPolling(id);
+      const inst = instances.find(i => i.id === id);
+      if (!inst) return;
+      inst.status = 'disconnected';
+      inst.qrCode = null;
+      inst.timeLeft = null;
+      save();
+      render();
+      toast(`Conexao cancelada para ${inst.phone}`, 'info');
+    }
+
+    // ---- Connect ----
+    async function connectInstance(id) {
+      const inst = instances.find(i => i.id === id);
+      if (!inst) return;
+
+      stopPolling(id);
+      inst.status = 'connecting';
+      inst.qrCode = null;
+      inst.timeLeft = null;
+      render();
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/instance/init`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${inst.token}`
+          },
+          body: JSON.stringify({
+            token: inst.token,
+            phone: inst.phone
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || data.error || `Erro HTTP ${res.status}`);
+        }
+
+        const qr = data.qrcode || data.qr || data.qrCode || data.base64 || null;
+
+        if (data.connected || data.status === 'connected' || data.status === 'CONNECTED') {
+          inst.status = 'connected';
+          inst.qrCode = null;
+          toast(`${inst.phone} ja esta conectado!`, 'success');
+        } else if (qr) {
+          inst.status = 'connecting';
+          inst.qrCode = qr;
+          toast(`QR Code gerado. Escaneie em ate ${QR_TIMEOUT_SECONDS}s.`, 'info');
+          save();
+          render();
+          startPolling(id);
+          return;
+        } else {
+          inst.status = 'connecting';
+          toast('Aguardando resposta da API...', 'info');
+          save();
+          render();
+          startPolling(id);
+          return;
+        }
+      } catch (err) {
+        inst.status = 'error';
+        inst.qrCode = null;
+
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          toast(`Falha de conexao com a API. Verifique sua internet.`, 'error');
+        } else {
+          toast(`Erro ao conectar: ${err.message}`, 'error');
+        }
+      }
+
+      save();
+      render();
+    }
+
+    // ---- Check Status ----
+    async function checkStatus(id) {
+      const inst = instances.find(i => i.id === id);
+      if (!inst) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/instance/status`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${inst.token}` }
+        });
+
+        if (!res.ok) {
+          throw new Error(`Erro HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.connected || data.status === 'connected' || data.status === 'CONNECTED' || data.state === 'open') {
+          stopPolling(id);
+          inst.status = 'connected';
+          inst.qrCode = null;
+          inst.timeLeft = null;
+          toast(`${inst.phone} esta conectado`, 'success');
+        } else if (data.qrcode || data.qr) {
+          inst.status = 'connecting';
+          inst.qrCode = data.qrcode || data.qr;
+          toast('Aguardando leitura do QR Code', 'info');
+        } else {
+          inst.status = 'disconnected';
+          inst.qrCode = null;
+          inst.timeLeft = null;
+          toast(`${inst.phone} desconectado`, 'info');
+        }
+      } catch (err) {
+        toast(`Erro ao verificar status: ${err.message}`, 'error');
+      }
+
+      save();
+      render();
+    }
+
+    // ---- Disconnect ----
+    async function disconnectInstance(id) {
+      const inst = instances.find(i => i.id === id);
+      if (!inst) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/instance/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${inst.token}` }
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.message || data.error || `Erro HTTP ${res.status}`);
+        }
+
+        inst.status = 'disconnected';
+        inst.qrCode = null;
+        toast(`${inst.phone} desconectado`, 'info');
+      } catch (err) {
+        toast(`Erro ao desconectar: ${err.message}`, 'error');
+      }
+
+      save();
+      render();
+    }
+
+    // ---- Delete ----
+    function openDeleteModal(id) {
+      deleteTargetId = id;
+      document.getElementById('deleteModal').classList.add('active');
+    }
+
+    function closeDeleteModal() {
+      deleteTargetId = null;
+      document.getElementById('deleteModal').classList.remove('active');
+    }
+
+    function confirmDelete() {
+      if (!deleteTargetId) return;
+      const inst = instances.find(i => i.id === deleteTargetId);
+      stopPolling(deleteTargetId);
+      instances = instances.filter(i => i.id !== deleteTargetId);
+      save();
+      render();
+      closeDeleteModal();
+      if (inst) toast(`Instancia ${inst.phone} removida`, 'info');
+    }
+
+    // ---- Toast ----
+    function toast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      el.className = `toast toast-${type}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }
+
+    // ---- Render ----
+    function render() {
+      const grid = document.getElementById('instancesGrid');
+      const empty = document.getElementById('emptyState');
+      const count = document.getElementById('instanceCount');
+
+      count.textContent = `${instances.length} instancia${instances.length !== 1 ? 's' : ''}`;
+
+      if (instances.length === 0) {
+        grid.innerHTML = '';
+        grid.appendChild(empty);
+        empty.style.display = '';
+        return;
+      }
+
+      const statusLabel = {
+        disconnected: 'Desconectado',
+        connecting: 'Conectando',
+        connected: 'Conectado',
+        error: 'Erro'
+      };
+
+      grid.innerHTML = instances.map(inst => `
+        <div class="instance-card">
+          <div class="card-top">
+            <div class="card-info">
+              <div class="phone">${formatPhone(inst.phone)}</div>
+              <div class="token-preview">${inst.token.slice(0, 20)}${'...'.repeat(inst.token.length > 20 ? 1 : 0)}</div>
+            </div>
+            <span class="status-badge status-${inst.status}">
+              ${inst.status === 'connecting' ? '<span class="spinner"></span> ' : ''}${statusLabel[inst.status]}
+            </span>
+          </div>
+
+          ${inst.qrCode ? `
+            <div class="qr-section">
+              <img src="${inst.qrCode}" alt="QR Code" />
+              <div class="qr-label">Escaneie o QR Code com o WhatsApp</div>
+              ${inst.timeLeft != null ? `
+                <div class="qr-timer">Tempo restante: <strong id="countdown-${inst.id}">${inst.timeLeft}s</strong></div>
+              ` : ''}
+            </div>
+          ` : ''}
+
+          <div class="card-actions">
+            ${inst.status === 'disconnected' || inst.status === 'error' ? `
+              <button class="btn btn-success btn-sm" onclick="connectInstance('${inst.id}')">Conectar</button>
+            ` : ''}
+            ${inst.status === 'connecting' ? `
+              <button class="btn btn-outline btn-sm" onclick="cancelConnection('${inst.id}')">Cancelar</button>
+              <button class="btn btn-success btn-sm" onclick="connectInstance('${inst.id}')">Novo QR</button>
+            ` : ''}
+            ${inst.status === 'connected' ? `
+              <button class="btn btn-outline btn-sm" onclick="disconnectInstance('${inst.id}')">Desconectar</button>
+            ` : ''}
+            <button class="btn btn-outline btn-sm" onclick="checkStatus('${inst.id}')">Status</button>
+            <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${inst.id}')" style="margin-left:auto">Remover</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function formatPhone(phone) {
+      const clean = phone.replace(/\D/g, '');
+      if (clean.length === 13) {
+        return `+${clean.slice(0,2)} (${clean.slice(2,4)}) ${clean.slice(4,9)}-${clean.slice(9)}`;
+      }
+      if (clean.length === 12) {
+        return `+${clean.slice(0,2)} (${clean.slice(2,4)}) ${clean.slice(4,8)}-${clean.slice(8)}`;
+      }
+      return phone;
+    }
+
+    // ---- Init ----
+    // Reset any stale "connecting" states on page load
+    instances.forEach(inst => {
+      if (inst.status === 'connecting') {
+        inst.status = 'disconnected';
+        inst.qrCode = null;
+        inst.timeLeft = null;
+      }
+    });
+    save();
+    render();
+
+    // Allow Enter key to submit
+    document.getElementById('tokenInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addInstance();
+    });
+    document.getElementById('phoneInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('tokenInput').focus();
+    });
+  </script>
+
+</body>
+</html>
