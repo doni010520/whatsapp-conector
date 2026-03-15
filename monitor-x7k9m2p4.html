@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor - WhatsApp Conector</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0a1628;
+      color: #e0e6ed;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #0f1f3d;
+      border-bottom: 1px solid #1a3a6e;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 20px; font-weight: 600; color: #fff; }
+    header .badge { font-size: 12px; background: #f59e0b; color: #0a1628; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: #8a9bb5;
+    }
+
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #25d366;
+      animation: pulse 2s infinite;
+    }
+    .pulse-dot.paused { background: #6b7280; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+    /* --- Stats --- */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-label { font-size: 11px; color: #8a9bb5; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+    .stat-connected .stat-value { color: #25d366; }
+    .stat-disconnected .stat-value { color: #6b7280; }
+    .stat-error .stat-value { color: #ef4444; }
+    .stat-total .stat-value { color: #7eb8ff; }
+
+    /* --- Alert Config --- */
+    .config-section {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .config-section h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #7eb8ff;
+      margin-bottom: 14px;
+    }
+
+    .config-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .config-group { flex: 1; min-width: 180px; }
+
+    .config-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #8a9bb5;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .config-group input, .config-group select {
+      width: 100%;
+      padding: 8px 12px;
+      background: #081222;
+      border: 1px solid #1a3a6e;
+      border-radius: 8px;
+      color: #e0e6ed;
+      font-size: 13px;
+    }
+
+    .config-group input:focus, .config-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .config-group select option { background: #081222; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px; height: 22px;
+      background: #1a3a6e;
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.active { background: #25d366; }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle.active::after { transform: translateX(18px); }
+
+    .toggle-label { font-size: 13px; color: #8a9bb5; }
+
+    /* --- Instance Monitor Cards --- */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .section-header h2 { font-size: 14px; font-weight: 600; color: #7eb8ff; }
+    .section-header span { font-size: 12px; color: #4a5d7a; }
+
+    .monitor-grid { display: grid; gap: 12px; }
+
+    .monitor-card {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .monitor-card:hover { border-color: #2a4a7e; }
+
+    .status-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.connected { background: #25d366; box-shadow: 0 0 6px #25d36666; }
+    .status-dot.disconnected { background: #6b7280; }
+    .status-dot.connecting { background: #f59e0b; animation: pulse 1.5s infinite; }
+    .status-dot.error { background: #ef4444; }
+
+    .monitor-info { flex: 1; }
+    .monitor-phone { font-size: 15px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
+    .monitor-meta { font-size: 11px; color: #4a5d7a; margin-top: 2px; }
+
+    .monitor-status {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .monitor-status.connected { background: #052e16; color: #25d366; }
+    .monitor-status.disconnected { background: #1e1e2e; color: #6b7280; }
+    .monitor-status.connecting { background: #1e293b; color: #f59e0b; }
+    .monitor-status.error { background: #2e0a0a; color: #ef4444; }
+
+    /* --- Event Log --- */
+    .log-section {
+      background: #0f1f3d;
+      border: 1px solid #1a3a6e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .log-section h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #7eb8ff;
+      margin-bottom: 12px;
+    }
+
+    .log-list {
+      max-height: 240px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: 'Consolas', monospace;
+    }
+
+    .log-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid #0a1628;
+      display: flex;
+      gap: 10px;
+    }
+
+    .log-time { color: #4a5d7a; flex-shrink: 0; }
+    .log-msg { color: #e0e6ed; }
+    .log-msg.alert-sent { color: #25d366; }
+    .log-msg.alert-fail { color: #ef4444; }
+
+    .log-empty { color: #4a5d7a; font-style: italic; font-size: 13px; }
+
+    /* --- Toast --- */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; animation: slideIn 0.3s ease, fadeOut 0.3s ease 3s forwards; max-width: 360px; }
+    .toast-success { background: #052e16; color: #25d366; border: 1px solid #14532d; }
+    .toast-error { background: #2e0a0a; color: #ef4444; border: 1px solid #450a0a; }
+    .toast-info { background: #0c1f3d; color: #7eb8ff; border: 1px solid #1a3a6e; }
+
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-outline { background: transparent; border: 1px solid #1a3a6e; color: #8a9bb5; }
+    .btn-outline:hover { border-color: #3b82f6; color: #7eb8ff; }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: #4a5d7a; font-size: 14px; }
+
+    /* --- Responsive --- */
+    @media (max-width: 640px) {
+      .config-row { flex-direction: column; }
+      .config-group { min-width: 100%; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="#f59e0b">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+    </svg>
+    <h1>Monitor</h1>
+    <span class="badge">dashboard</span>
+    <div class="header-right">
+      <div class="pulse-dot" id="pulseIndicator"></div>
+      <span id="lastCheckLabel">Aguardando...</span>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card stat-total">
+        <div class="stat-value" id="statTotal">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card stat-connected">
+        <div class="stat-value" id="statConnected">0</div>
+        <div class="stat-label">Conectadas</div>
+      </div>
+      <div class="stat-card stat-disconnected">
+        <div class="stat-value" id="statDisconnected">0</div>
+        <div class="stat-label">Desconectadas</div>
+      </div>
+      <div class="stat-card stat-error">
+        <div class="stat-value" id="statError">0</div>
+        <div class="stat-label">Com Erro</div>
+      </div>
+    </div>
+
+    <!-- API Config -->
+    <div class="config-section">
+      <h2>Token da API (Admin)</h2>
+      <div class="config-row">
+        <div class="config-group" style="flex:2">
+          <label>Token para listar instancias</label>
+          <input type="text" id="adminToken" placeholder="Token admin da uazapi" />
+        </div>
+        <button class="btn btn-outline" onclick="saveAdminToken()">Salvar</button>
+        <button class="btn btn-outline" onclick="fetchInstancesFromAPI()">Buscar Instancias</button>
+      </div>
+      <div style="font-size:11px;color:#4a5d7a;margin-top:8px" id="apiSourceLabel">Fonte: localStorage</div>
+    </div>
+
+    <!-- Alert Config -->
+    <div class="config-section">
+      <h2>Configuracao de Alertas</h2>
+      <div class="config-row">
+        <div class="config-group">
+          <label>Numero que recebe alertas</label>
+          <input type="text" id="alertPhone" placeholder="5571999999999" />
+        </div>
+        <div class="config-group">
+          <label>Instancia que envia</label>
+          <select id="alertSender">
+            <option value="">Selecione uma instancia</option>
+          </select>
+        </div>
+        <button class="btn btn-outline" onclick="saveAlertConfig()">Salvar</button>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle" id="alertToggle" onclick="toggleAlerts()"></div>
+        <span class="toggle-label" id="alertToggleLabel">Alertas desativados</span>
+      </div>
+    </div>
+
+    <!-- Instances Monitor -->
+    <div class="section-header">
+      <h2>Instancias</h2>
+      <span id="monitorRefreshLabel">Auto-refresh: 30s</span>
+    </div>
+
+    <div class="monitor-grid" id="monitorGrid">
+      <div class="empty-state">Nenhuma instancia cadastrada.</div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="log-section">
+      <div class="section-header" style="margin-bottom:0">
+        <h2>Log de Eventos</h2>
+        <button class="btn btn-outline" onclick="clearLog()" style="padding:4px 10px;font-size:11px">Limpar</button>
+      </div>
+      <div class="log-list" id="logList">
+        <div class="log-empty">Nenhum evento registrado.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // ---- Config ----
+    const API_BASE_URL = 'https://benitechlab.uazapi.com';
+    const MONITOR_POLL_INTERVAL = 30000;
+
+    // ---- State ----
+    let instances = JSON.parse(localStorage.getItem('wpp_instances') || '[]');
+    let previousStatuses = {};
+    let alertConfig = JSON.parse(localStorage.getItem('wpp_alert_config') || '{}');
+    let eventLog = JSON.parse(localStorage.getItem('wpp_event_log') || '[]');
+    let adminToken = localStorage.getItem('wpp_admin_token') || '';
+    let monitorInterval = null;
+    let instanceSource = 'localStorage';
+
+    // ---- Init previous statuses from current data ----
+    instances.forEach(inst => {
+      previousStatuses[inst.id] = inst.status;
+    });
+
+    // ---- Admin Token ----
+    document.getElementById('adminToken').value = adminToken;
+
+    function saveAdminToken() {
+      adminToken = document.getElementById('adminToken').value.trim();
+      localStorage.setItem('wpp_admin_token', adminToken);
+      toast('Token admin salvo', 'success');
+    }
+
+    // ---- Fetch from API ----
+    async function fetchInstancesFromAPI() {
+      if (!adminToken) {
+        toast('Configure o token admin primeiro', 'error');
+        return;
+      }
+
+      const endpoints = [
+        { url: `${API_BASE_URL}/instance/list`, method: 'GET' },
+        { url: `${API_BASE_URL}/admin/users`, method: 'GET' },
+        { url: `${API_BASE_URL}/instances`, method: 'GET' },
+        { url: `${API_BASE_URL}/instance/listInstances`, method: 'GET' },
+      ];
+
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep.url, {
+            method: ep.method,
+            headers: {
+              'Authorization': `Bearer ${adminToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!res.ok) continue;
+
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.instances || data.data || data.users || []);
+
+          if (!Array.isArray(list) || list.length === 0) continue;
+
+          // Map API response to our instance format
+          instances = list.map((item, idx) => {
+            const phone = item.phone || item.jid?.replace(/@.*/, '') || item.name || item.instance || `instancia-${idx + 1}`;
+            const token = item.token || item.apikey || item.key || adminToken;
+            const connected = item.connected || item.status === 'connected' || item.status === 'CONNECTED' || item.state === 'open';
+            const existing = instances.find(i => i.phone === phone);
+
+            return {
+              id: existing?.id || Date.now().toString(36) + idx,
+              phone: phone,
+              token: token,
+              status: connected ? 'connected' : 'disconnected',
+              lastCheck: new Date().toISOString(),
+              addedAt: existing?.addedAt || new Date().toISOString()
+            };
+          });
+
+          // Save to localStorage so main page also sees them
+          localStorage.setItem('wpp_instances', JSON.stringify(instances));
+          instanceSource = ep.url;
+          document.getElementById('apiSourceLabel').textContent = `Fonte: API (${ep.url}) - ${instances.length} instancias`;
+
+          // Reset previous statuses
+          previousStatuses = {};
+          instances.forEach(inst => { previousStatuses[inst.id] = inst.status; });
+
+          loadAlertConfig();
+          renderMonitor();
+          toast(`${instances.length} instancias carregadas da API`, 'success');
+          addLogEntry(`${instances.length} instancias carregadas de ${ep.url}`);
+          return;
+
+        } catch (_) {
+          continue;
+        }
+      }
+
+      toast('Nenhum endpoint de listagem encontrado. Usando localStorage.', 'error');
+      addLogEntry('Falha ao buscar instancias da API - usando localStorage', 'alert-fail');
+    }
+
+    // ---- Alert Config ----
+    function loadAlertConfig() {
+      const phoneInput = document.getElementById('alertPhone');
+      const senderSelect = document.getElementById('alertSender');
+      const toggle = document.getElementById('alertToggle');
+      const label = document.getElementById('alertToggleLabel');
+
+      phoneInput.value = alertConfig.phone || '';
+
+      // Populate sender dropdown
+      senderSelect.innerHTML = '<option value="">Selecione uma instancia</option>';
+      instances.forEach(inst => {
+        const opt = document.createElement('option');
+        opt.value = inst.id;
+        opt.textContent = `${formatPhone(inst.phone)} ${inst.status === 'connected' ? '(conectada)' : ''}`;
+        if (alertConfig.senderId === inst.id) opt.selected = true;
+        senderSelect.appendChild(opt);
+      });
+
+      if (alertConfig.enabled) {
+        toggle.classList.add('active');
+        label.textContent = 'Alertas ativados';
+      } else {
+        toggle.classList.remove('active');
+        label.textContent = 'Alertas desativados';
+      }
+    }
+
+    function saveAlertConfig() {
+      alertConfig.phone = document.getElementById('alertPhone').value.trim();
+      alertConfig.senderId = document.getElementById('alertSender').value;
+      localStorage.setItem('wpp_alert_config', JSON.stringify(alertConfig));
+      toast('Configuracao de alertas salva', 'success');
+    }
+
+    function toggleAlerts() {
+      alertConfig.enabled = !alertConfig.enabled;
+      localStorage.setItem('wpp_alert_config', JSON.stringify(alertConfig));
+      loadAlertConfig();
+      toast(alertConfig.enabled ? 'Alertas ativados' : 'Alertas desativados', 'info');
+    }
+
+    // ---- Send WhatsApp Alert ----
+    async function sendWhatsAppAlert(message) {
+      if (!alertConfig.enabled || !alertConfig.phone || !alertConfig.senderId) return;
+
+      const sender = instances.find(i => i.id === alertConfig.senderId);
+      if (!sender || sender.status !== 'connected') {
+        addLogEntry(`Alerta nao enviado: instancia remetente nao conectada`, 'alert-fail');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/message/text`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sender.token}`
+          },
+          body: JSON.stringify({
+            phone: alertConfig.phone,
+            message: message
+          })
+        });
+
+        if (res.ok) {
+          addLogEntry(`Alerta enviado para ${formatPhone(alertConfig.phone)}`, 'alert-sent');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          addLogEntry(`Falha ao enviar alerta: ${data.message || res.status}`, 'alert-fail');
+        }
+      } catch (err) {
+        addLogEntry(`Erro ao enviar alerta: ${err.message}`, 'alert-fail');
+      }
+    }
+
+    // ---- Monitor Polling ----
+    async function pollAllInstances() {
+      const now = new Date();
+      document.getElementById('lastCheckLabel').textContent = `Ultimo check: ${now.toLocaleTimeString('pt-BR')}`;
+
+      for (const inst of instances) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/instance/status`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${inst.token}` }
+          });
+
+          const data = await res.json();
+          let newStatus;
+
+          if (data.connected || data.status === 'connected' || data.status === 'CONNECTED' || data.state === 'open') {
+            newStatus = 'connected';
+          } else {
+            newStatus = 'disconnected';
+          }
+
+          const oldStatus = previousStatuses[inst.id] || 'unknown';
+
+          if (oldStatus !== newStatus && oldStatus !== 'unknown') {
+            const statusLabels = { connected: 'Conectado', disconnected: 'Desconectado', error: 'Erro' };
+            const msg = `${formatPhone(inst.phone)}: ${statusLabels[oldStatus] || oldStatus} -> ${statusLabels[newStatus] || newStatus}`;
+            addLogEntry(msg);
+
+            const alertMsg = `[WhatsApp Conector]\n\nInstancia ${formatPhone(inst.phone)} mudou de ${statusLabels[oldStatus] || oldStatus} para ${statusLabels[newStatus] || newStatus}\n\nHorario: ${now.toLocaleString('pt-BR')}`;
+            sendWhatsAppAlert(alertMsg);
+          }
+
+          previousStatuses[inst.id] = newStatus;
+          inst.status = newStatus;
+          inst.lastCheck = now.toISOString();
+
+        } catch (err) {
+          const oldStatus = previousStatuses[inst.id];
+          if (oldStatus !== 'error' && oldStatus !== 'unknown') {
+            addLogEntry(`${formatPhone(inst.phone)}: Erro ao verificar - ${err.message}`);
+            sendWhatsAppAlert(`[WhatsApp Conector]\n\nErro ao verificar instancia ${formatPhone(inst.phone)}: ${err.message}\n\nHorario: ${now.toLocaleString('pt-BR')}`);
+          }
+          previousStatuses[inst.id] = 'error';
+          inst.status = 'error';
+          inst.lastCheck = now.toISOString();
+        }
+      }
+
+      // Save updated statuses back
+      localStorage.setItem('wpp_instances', JSON.stringify(instances));
+      renderMonitor();
+    }
+
+    function startMonitoring() {
+      pollAllInstances();
+      monitorInterval = setInterval(pollAllInstances, MONITOR_POLL_INTERVAL);
+    }
+
+    // ---- Event Log ----
+    function addLogEntry(message, type = '') {
+      const now = new Date();
+      const entry = {
+        time: now.toLocaleTimeString('pt-BR'),
+        date: now.toLocaleDateString('pt-BR'),
+        message,
+        type
+      };
+      eventLog.unshift(entry);
+      if (eventLog.length > 100) eventLog = eventLog.slice(0, 100);
+      localStorage.setItem('wpp_event_log', JSON.stringify(eventLog));
+      renderLog();
+    }
+
+    function clearLog() {
+      eventLog = [];
+      localStorage.setItem('wpp_event_log', JSON.stringify(eventLog));
+      renderLog();
+    }
+
+    function renderLog() {
+      const list = document.getElementById('logList');
+      if (eventLog.length === 0) {
+        list.innerHTML = '<div class="log-empty">Nenhum evento registrado.</div>';
+        return;
+      }
+      list.innerHTML = eventLog.map(e => `
+        <div class="log-entry">
+          <span class="log-time">${e.date} ${e.time}</span>
+          <span class="log-msg ${e.type}">${e.message}</span>
+        </div>
+      `).join('');
+    }
+
+    // ---- Render ----
+    function renderMonitor() {
+      // Stats
+      const total = instances.length;
+      const connected = instances.filter(i => i.status === 'connected').length;
+      const disconnected = instances.filter(i => i.status === 'disconnected').length;
+      const errors = instances.filter(i => i.status === 'error').length;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statConnected').textContent = connected;
+      document.getElementById('statDisconnected').textContent = disconnected;
+      document.getElementById('statError').textContent = errors;
+
+      // Grid
+      const grid = document.getElementById('monitorGrid');
+      if (instances.length === 0) {
+        grid.innerHTML = '<div class="empty-state">Nenhuma instancia cadastrada.</div>';
+        return;
+      }
+
+      const statusLabel = {
+        disconnected: 'Desconectado',
+        connecting: 'Conectando',
+        connected: 'Conectado',
+        error: 'Erro'
+      };
+
+      grid.innerHTML = instances.map(inst => {
+        const lastCheck = inst.lastCheck ? new Date(inst.lastCheck).toLocaleTimeString('pt-BR') : '--';
+        return `
+          <div class="monitor-card">
+            <div class="status-dot ${inst.status}"></div>
+            <div class="monitor-info">
+              <div class="monitor-phone">${formatPhone(inst.phone)}</div>
+              <div class="monitor-meta">Ultimo check: ${lastCheck}</div>
+            </div>
+            <span class="monitor-status ${inst.status}">${statusLabel[inst.status] || inst.status}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ---- Helpers ----
+    function formatPhone(phone) {
+      const clean = phone.replace(/\D/g, '');
+      if (clean.length === 13) return `+${clean.slice(0,2)} (${clean.slice(2,4)}) ${clean.slice(4,9)}-${clean.slice(9)}`;
+      if (clean.length === 12) return `+${clean.slice(0,2)} (${clean.slice(2,4)}) ${clean.slice(4,8)}-${clean.slice(8)}`;
+      return phone;
+    }
+
+    function toast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      el.className = `toast toast-${type}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }
+
+    // ---- Init ----
+    loadAlertConfig();
+    renderMonitor();
+    renderLog();
+    startMonitoring();
+  </script>
+
+</body>
+</html>
